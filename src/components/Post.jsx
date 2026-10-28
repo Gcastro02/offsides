@@ -39,6 +39,7 @@ function Post({
   const [width, setWidth] = useState();
   const [group, setGroup] = useRecyclingState(post.group, [post]);
   const [identity, setIdentity] = useRecyclingState(post?.identity, [post]);
+  const [hidden, setHidden] = useRecyclingState(false, [post]);
   const postID = post.id;
 
   // Posts made with a username can be tapped through to that user's public profile.
@@ -93,6 +94,29 @@ function Post({
     );
   }, [postID, API]);
 
+  const blockUser = React.useCallback(() => {
+    Alert.alert(
+      'Hide posts from this user?',
+      "You won't see posts or comments from whoever made this post. You can undo this from Settings.",
+      [
+        {
+          text: 'Confirm',
+          onPress: async () => {
+            try {
+              await API.hidePostsFromUser(postID);
+              setHidden(true);
+            } catch (e) {
+              Alert.alert("Sorry, that didn't work. Please try again.");
+            }
+          },
+        },
+        {
+          text: 'Cancel',
+        },
+      ],
+    );
+  }, [postID, API]);
+
   const createRepost = React.useCallback(() => {
     nav.push('Writer', {
       repostID: postID,
@@ -102,6 +126,10 @@ function Post({
   }, [postID]);
 
   const MemoizedPost = React.memo(Post);
+
+  if (hidden) {
+    return <></>;
+  }
 
   return (
     <Card
@@ -143,12 +171,20 @@ function Post({
               </Text>
             )}
           </View>
-          {post.authored_by_user && (
+          {post.authored_by_user ? (
             <IconButton
               icon="delete"
               size={20}
               style={{ marginRight: 0 }}
               onPress={deletePost}
+            />
+          ) : (
+            <IconButton
+              icon="account-cancel-outline"
+              size={20}
+              style={{ marginRight: 0 }}
+              iconColor={colors.onSurfaceDisabled}
+              onPress={blockUser}
             />
           )}
         </View>

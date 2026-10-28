@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StatusBar, ScrollView, Linking, Image } from 'react-native';
+import { Alert, View, StatusBar, ScrollView, Linking, Image } from 'react-native';
 import {
   Appbar,
   Button,
@@ -34,6 +34,28 @@ function SettingsScreen({ navigation }) {
   const signOut = () => {
     storage.clearAll();
     RNRestart.restart();
+  };
+  const unblockAll = () => {
+    Alert.alert(
+      'Unhide everyone?',
+      "You'll start seeing posts and comments from every user you've hidden.",
+      [
+        {
+          text: 'Confirm',
+          onPress: async () => {
+            try {
+              await appState.API.unhidePostsFromAllUsers();
+              Alert.alert('Done - everyone is unhidden.');
+            } catch (e) {
+              Alert.alert("Sorry, that didn't work. Please try again.");
+            }
+          },
+        },
+        {
+          text: 'Cancel',
+        },
+      ],
+    );
   };
   return (
     <View style={{ backgroundColor: colors.background, flex: 1 }}>
@@ -87,6 +109,12 @@ function SettingsScreen({ navigation }) {
             Website
           </Button>
         </View>
+        <Button
+          mode="outlined"
+          onPress={unblockAll}
+          style={{ marginBottom: 20 }}>
+          Unhide All Users
+        </Button>
         {updateAvailable && (
           <Card style={{ width: '90%', marginBottom: 15 }} mode="contained">
             <Card.Title

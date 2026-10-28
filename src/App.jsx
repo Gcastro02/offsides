@@ -17,6 +17,8 @@ import EditProfileScreen from './screens/EditProfileScreen';
 import WriterScreen from './screens/WriterScreen';
 import MessageScreen from './screens/MessagesScreen';
 import ThreadScreen from './screens/ThreadScreen';
+import GroupChatsScreen from './screens/GroupChatsScreen';
+import ExploreChatsScreen from './screens/ExploreChatsScreen';
 import UserProfileScreen from './screens/UserProfileScreen';
 import { storage, hasMigratedFromAsyncStorage, migrateFromAsyncStorage } from './utils/mmkv';
 import { useMMKVString } from 'react-native-mmkv';
@@ -110,6 +112,8 @@ export default function App() {
                 <Stack.Screen name="EditProfile" component={EditProfileScreen} />
                 <Stack.Screen name="Messages" component={MessageScreen} />
                 <Stack.Screen name="Thread" component={ThreadScreen} />
+                <Stack.Screen name="GroupChats" component={GroupChatsScreen} />
+                <Stack.Screen name="ExploreChats" component={ExploreChatsScreen} />
                 <Stack.Screen
                   name="ExploreGroups"
                   component={ExploreGroupsScreen}

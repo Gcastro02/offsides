@@ -2,6 +2,7 @@ import React, { useCallback } from 'react';
 import { FlatList, InteractionManager, View } from 'react-native';
 import {
   Appbar,
+  Snackbar,
   Surface,
   Text,
   TextInput,
@@ -39,6 +40,7 @@ function ThreadScreen({ navigation, route }) {
   const [isFetching, setIsFetching] = React.useState(false);
   const [manualRefreshing, setManualRefreshing] = React.useState(false);
   const [messageDraft, setMessageDraft] = React.useState('');
+  const [error, setError] = React.useState(false);
 
   React.useEffect(() => {
     if (isFocused) {
@@ -62,26 +64,47 @@ function ThreadScreen({ navigation, route }) {
       if (manual) {
         setManualRefreshing(true);
       }
-      const d = await API.getDMThread(chatID);
-      setMessages(d.messages);
-      setMeta(d);
-      setManualRefreshing(false);
-      setIsFetching(false);
+      try {
+        const d = await API.getDMThread(chatID);
+        setMessages(d.messages);
+        setMeta(d);
+      } catch (e) {
+        // Background polls fail silently - only a manual pull should complain.
+        if (manual) {
+          setError(true);
+        }
+      } finally {
+        setManualRefreshing(false);
+        setIsFetching(false);
+      }
     }
   };
 
   const sendMessage = async () => {
     const clientID = await newClientID();
+    const text = messageDraft;
     setMessageDraft('');
-    await API.sendDM(chatID, messageDraft, clientID);
-    await fetchMessages(false);
+    try {
+      await API.sendDM(chatID, text, clientID);
+      await fetchMessages(false);
+    } catch (e) {
+      // Put the draft back so the message isn't lost.
+      setMessageDraft(text);
+      setError(true);
+    }
   };
 
   const startThread = async () => {
     const clientID = await newClientID();
+    const text = messageDraft;
     setMessageDraft('');
-    const newDM = await API.startDM(messageDraft, clientID, postID);
-    navigation.setParams({ chatID: newDM.chat.id });
+    try {
+      const newDM = await API.startDM(text, clientID, postID);
+      navigation.setParams({ chatID: newDM.chat.id });
+    } catch (e) {
+      setMessageDraft(text);
+      setError(true);
+    }
   };
 
   const leaveChat = async () => {
@@ -186,6 +209,9 @@ function ThreadScreen({ navigation, route }) {
           }
         />
       </KeyboardStickyView>
+      <Snackbar visible={error} onDismiss={() => setError(false)}>
+        Sorry, that didn't go through. Check your connection.
+      </Snackbar>
     </View>
   );
 }
