@@ -17,6 +17,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import offsidesLogo from '../assets/Offsides.png';
 import { needsUpdate } from '../utils';
 import { useMMKVObject } from 'react-native-mmkv';
+import { setStringAsync as copyToClipboard } from 'expo-clipboard';
+import {
+  disableNotifications,
+  enableNotifications,
+  getNotificationKey,
+} from '../utils/notifications';
 
 function SettingsScreen({ navigation }) {
   const { appState } = React.useContext(AppContext);
@@ -31,9 +37,30 @@ function SettingsScreen({ navigation }) {
     const needs = await needsUpdate(version);
     setUpdateAvailable(needs);
   };
-  const signOut = () => {
+  const signOut = async () => {
+    try {
+      await disableNotifications();
+    } catch (e) {
+      // Offline - sign out anyway rather than trapping the user here.
+    }
     storage.clearAll();
     RNRestart.restart();
+  };
+  const copyNotificationKey = async () => {
+    await copyToClipboard(getNotificationKey());
+    // Make sure this phone is actually listening on the key being handed out.
+    let enabled = false;
+    try {
+      enabled = await enableNotifications();
+    } catch (e) {
+      // Offline - it'll subscribe on the next launch.
+    }
+    Alert.alert(
+      'Notification key copied',
+      enabled
+        ? 'Give this to your notifier so it knows where to send your DM notifications. Keep it private - anyone with it could receive them.'
+        : "Copied, but notifications are off for Offsides, so nothing will arrive until you allow them in Android's settings.",
+    );
   };
   const unblockAll = () => {
     Alert.alert(
@@ -114,6 +141,13 @@ function SettingsScreen({ navigation }) {
           onPress={unblockAll}
           style={{ marginBottom: 20 }}>
           Unhide All Users
+        </Button>
+        <Button
+          mode="outlined"
+          icon="bell-outline"
+          onPress={copyNotificationKey}
+          style={{ marginBottom: 20 }}>
+          Copy Notification Key
         </Button>
         {updateAvailable && (
           <Card style={{ width: '90%', marginBottom: 15 }} mode="contained">

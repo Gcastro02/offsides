@@ -2,10 +2,16 @@ import 'react-native-gesture-handler';
 import React, { Context } from 'react';
 import { OffsidesAppState } from './types/OffsidesTypes.js';
 import { InteractionManager, StatusBar, useColorScheme } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  StackActions,
+  createNavigationContainerRef,
+} from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import crashlytics from '@react-native-firebase/crashlytics';
+import messaging from '@react-native-firebase/messaging';
+import { Snackbar } from 'react-native-paper';
 import { SidechatAPIClient } from 'sidechat.js';
 import HomeScreen from './screens/HomeScreen';
 import SettingsScreen from './screens/SettingsScreen';
@@ -23,9 +29,11 @@ import UserProfileScreen from './screens/UserProfileScreen';
 import { storage, hasMigratedFromAsyncStorage, migrateFromAsyncStorage } from './utils/mmkv';
 import { useMMKVString } from 'react-native-mmkv';
 import { KeyboardProvider } from "react-native-keyboard-controller";
+import { enableNotifications } from './utils/notifications';
 
 
 const Stack = createNativeStackNavigator();
+const navigationRef = createNavigationContainerRef();
 
 /**
  * Global app context for Offsides.  Contains API as well as current app state.
@@ -39,6 +47,11 @@ export default function App() {
   const [appState, setAppState] = React.useState(null);
   const [hasMigrated, setHasMigrated] = React.useState(hasMigratedFromAsyncStorage);
   const [postSortMethod, setPostSortMethod] = useMMKVString('postSortMethod');
+  const [navReady, setNavReady] = React.useState(false);
+  // Chat to open once navigation is up, from a tapped notification.
+  const [openChatID, setOpenChatID] = React.useState(null);
+  // A DM push that arrived while the app was open (Android doesn't show those).
+  const [incoming, setIncoming] = React.useState(null);
   React.useEffect(() => {
     crashlytics().log('Loading App');
     crashlytics().log('Fetching initial app variables');
@@ -85,11 +98,44 @@ export default function App() {
     }
   }, [hasMigrated]);
 
+  React.useEffect(() => {
+    if (needsLogin !== false) {
+      return;
+    }
+    enableNotifications().catch(e => crashlytics().recordError(e));
+    const openFrom = m => m?.data?.chatID && setOpenChatID(m.data.chatID);
+    messaging().getInitialNotification().then(openFrom);
+    const unsubscribeOpened = messaging().onNotificationOpenedApp(openFrom);
+    const unsubscribeMessage = messaging().onMessage(m => {
+      const route = navigationRef.getCurrentRoute();
+      // Already looking at that thread - it'll show up there on its own.
+      if (route?.name == 'Thread' && route.params?.chatID == m.data?.chatID) {
+        return;
+      }
+      setIncoming(m);
+    });
+    return () => {
+      unsubscribeOpened();
+      unsubscribeMessage();
+    };
+  }, [needsLogin]);
+
+  React.useEffect(() => {
+    if (navReady && openChatID) {
+      navigationRef.dispatch(
+        StackActions.push('Thread', { mode: 'existing', chatID: openChatID }),
+      );
+      setOpenChatID(null);
+    }
+  }, [navReady, openChatID]);
+
   return (
     <SafeAreaProvider>
       <KeyboardProvider>
         <AppContext.Provider value={{ appState, setAppState }}>
-          <NavigationContainer>
+          <NavigationContainer
+            ref={navigationRef}
+            onReady={() => setNavReady(true)}>
             <StatusBar
               barStyle={colorScheme == 'dark' ? 'light-content' : 'dark-content'}
             />
@@ -136,6 +182,15 @@ export default function App() {
                 />
               </Stack.Navigator>
             )}
+            <Snackbar
+              visible={!!incoming}
+              onDismiss={() => setIncoming(null)}
+              action={{
+                label: 'Open',
+                onPress: () => setOpenChatID(incoming?.data?.chatID),
+              }}>
+              {incoming?.notification?.body || 'New message'}
+            </Snackbar>
           </NavigationContainer>
         </AppContext.Provider>
       </KeyboardProvider>
