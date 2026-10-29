@@ -45,3 +45,35 @@ export function mergeChats(current, latest) {
 }
 
 export const isGroupChat = chat => chat?.type == 'group';
+
+/**
+ * Fetches one page of a chat's messages. The API returns the newest 100, and
+ * the returned cursor fetches the 100 before those; it's null at the start of
+ * the conversation. (getDMThread drops the cursor, so it can't go back.)
+ * @param {SidechatAPIClient} API
+ * @param {String} chatID
+ * @param {String} [cursor]
+ * @returns {Promise<{chat: Object, cursor: ?String}>}
+ */
+export async function getMessages(API, chatID, cursor) {
+  const res = await API.sendRequest(
+    `/v1/chats/messages?chat_id=${chatID}` +
+      (cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''),
+  );
+  if (!res.ok) {
+    throw new Error(`Failed to fetch messages (HTTP ${res.status})`);
+  }
+  const json = await res.json();
+  return { chat: json.chat, cursor: json.cursor || null };
+}
+
+/**
+ * Folds a page of messages into those already loaded, newest first, so
+ * polling for new messages doesn't throw away older ones scrolled back to.
+ */
+export function mergeMessages(current, page) {
+  const pageIDs = new Set(page.map(m => m.id));
+  return [...page, ...current.filter(m => !pageIDs.has(m.id))].sort(
+    (a, b) => new Date(b.created_at) - new Date(a.created_at),
+  );
+}
